@@ -48,7 +48,7 @@ export function runPnpmCommand(root: string, args: readonly string[]): void {
  * @param root - Repository root containing the aggregate tsconfig.
  * @param face - Independent compiler face whose package projects are emitted.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns Arguments for `process.execPath`, including an 8 GiB old-space heap limit for the Host face.
+ * @returns Arguments for `process.execPath`, including an 8 GiB old-space heap limit.
  * @throws If the aggregate configuration is invalid, has no references, or can emit files.
  */
 export function referencedProjectsCompilerArgs(
@@ -77,7 +77,7 @@ export function referencedProjectsCompilerArgs(
     throw new Error(`compile-referenced-projects: ${configPath} requires noEmit: true to exclude its aggregate program`)
   }
   return [
-    ...hostHeapArgs(face),
+    ...compilerHeapArgs(),
     fileURLToPath(import.meta.resolve('typescript/bin/tsc')),
     '-b',
     ...mode === 'benchmark-emit' ? ['--noCheck'] : [],
@@ -108,8 +108,11 @@ export function aggregateBuildArgs(face: 'host' | 'client'): string[] {
   return ['--max-old-space-size=8192', fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-b', `tsconfig.${face}.json`]
 }
 
-function hostHeapArgs(face: 'host' | 'client'): string[] {
-  return face === 'host' ? ['--max-old-space-size=8192'] : []
+function compilerHeapArgs(): string[] {
+  // Both compiler faces build large reference graphs; give each an explicit
+  // old-space ceiling so V8 reports an allocation failure instead of crashing
+  // with an access violation on memory-constrained hosts.
+  return ['--max-old-space-size=8192']
 }
 
 /**
